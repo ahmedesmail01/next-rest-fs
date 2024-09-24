@@ -3,18 +3,17 @@ import User from "@/app/lib/modals/user";
 import { NextResponse } from "next/server";
 import { Types } from "mongoose";
 
-const ObjectId = require("mongoose").Types.ObjectId;
-
 export const GET = async () => {
   try {
     await connect();
     const users = await User.find();
-
-    return new NextResponse(JSON.stringify(users), { status: 200 });
-  } catch (error: any) {
-    return new NextResponse(" Error in fetshing users" + error.message, {
-      status: 500,
-    });
+    return NextResponse.json(users, { status: 200 });
+  } catch (error: unknown) {
+    console.error("Error in fetching users:", error);
+    return NextResponse.json(
+      { error: "Error in fetching users" },
+      { status: 500 }
+    );
   }
 };
 
@@ -24,91 +23,99 @@ export const POST = async (request: Request) => {
     await connect();
     const newUser = new User(body);
     await newUser.save();
-    return new NextResponse(JSON.stringify(newUser), { status: 200 });
-  } catch (error: any) {
-    return new NextResponse("Error in posting user" + error.message, {
-      status: 500,
-    });
+    return NextResponse.json(newUser, { status: 201 });
+  } catch (error: unknown) {
+    console.error("Error in posting user:", error);
+    return NextResponse.json(
+      { error: "Error in posting user" },
+      { status: 500 }
+    );
   }
 };
 
 export const PATCH = async (request: Request) => {
   try {
-    const body = await request.json();
-    const { userId, newUserName } = body;
+    const { userId, newUserName } = await request.json();
     await connect();
 
     if (!userId || !newUserName) {
-      return new NextResponse(
-        JSON.stringify({ message: "invalid user id or new username" }),
+      return NextResponse.json(
+        { message: "Invalid user id or new username" },
         { status: 400 }
       );
     }
 
     if (!Types.ObjectId.isValid(userId)) {
-      return new NextResponse(JSON.stringify({ message: "invalid user id" }), {
-        status: 400,
-      });
+      return NextResponse.json({ message: "Invalid user id" }, { status: 400 });
     }
 
     const updatedUser = await User.findOneAndUpdate(
-      { _id: new ObjectId(userId) },
+      { _id: new Types.ObjectId(userId) },
       { username: newUserName },
       { new: true }
     );
 
     if (!updatedUser) {
-      return new NextResponse(
-        JSON.stringify({ message: "error in updating user" }),
-        { status: 500 }
-      );
+      return NextResponse.json({ message: "User not found" }, { status: 404 });
     }
 
-    return new NextResponse(
-      JSON.stringify({ message: "user is updated", user: updatedUser }),
+    return NextResponse.json(
+      { message: "User is updated", user: updatedUser },
       { status: 200 }
     );
   } catch (error: unknown) {
+    console.error("Error in updating user:", error);
     if (error instanceof Error) {
-      return new NextResponse("Error in updating user: " + error.message, {
-        status: 500,
-      });
-    } else {
-      // Handle non-Error types or provide a generic error message
-      return new NextResponse("An unexpected error occurred.", { status: 500 });
+      return NextResponse.json(
+        { error: `Error in updating user: ${error.message}` },
+        { status: 500 }
+      );
     }
+    return NextResponse.json(
+      { error: "An unexpected error occurred" },
+      { status: 500 }
+    );
   }
 };
 
 export const DELETE = async (request: Request) => {
   try {
-    const body = await request.json();
-    await connect();
+    const { searchParams } = new URL(request.url);
+    const userId = searchParams.get("userId");
 
-    const { userId } = body;
     if (!userId) {
-      return new NextResponse(
-        JSON.stringify({ message: "user id is not sent" }),
+      return NextResponse.json(
+        { message: "UserId not found" },
         { status: 400 }
       );
     }
 
     if (!Types.ObjectId.isValid(userId)) {
-      return new NextResponse(
-        JSON.stringify({ message: "user id is invalid" }),
+      return NextResponse.json(
+        { message: "UserId is not valid" },
         { status: 400 }
       );
     }
 
-    const deletedUser = await User.findByIdAndDelete(userId);
+    await connect();
 
-    return new NextResponse(
-      JSON.stringify({ message: "user is deleted", deletedUser }),
+    const deletedUser = await User.findByIdAndDelete(
+      new Types.ObjectId(userId)
+    );
+
+    if (!deletedUser) {
+      return NextResponse.json({ message: "User not found" }, { status: 404 });
+    }
+
+    return NextResponse.json(
+      { message: "User deleted", user: deletedUser },
       { status: 200 }
     );
-  } catch (error) {
-    return new NextResponse("Error in deleting user" + error.message, {
-      status: 500,
-    });
+  } catch (error: unknown) {
+    console.error("Error in deleting user:", error);
+    return NextResponse.json(
+      { error: "Error in deleting user" },
+      { status: 500 }
+    );
   }
 };
